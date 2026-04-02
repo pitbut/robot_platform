@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Доставщик</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a12;color:#e0e0f0;font-family:system-ui,sans-serif;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Top bar ── */
+#topbar{display:flex;gap:5px;align-items:center;padding:7px 10px;background:rgba(6,6,16,0.95);z-index:600;flex-shrink:0;border-bottom:1px solid #16162a;flex-wrap:wrap}
+.badge{padding:3px 9px;border-radius:10px;font-size:11px;white-space:nowrap}
+.badge.ok  {background:#0d2d16;color:#4ade80;border:1px solid #1a5e2e}
+.badge.err {background:#2d0d0d;color:#f87171;border:1px solid #5e1a1a}
+.badge.warn{background:#2d1f0d;color:#f59e0b;border:1px solid #5e3e1a}
+#back-btn{color:#444;text-decoration:none;font-size:13px;margin-right:4px;flex-shrink:0}
+
+/* ── Map ── */
+#map{flex:1;z-index:1}
+.leaflet-container{background:#0d0d1a}
+
+/* ── Overlay panels ── */
+.ov{position:absolute;z-index:400;background:rgba(8,8,20,0.92);border:1px solid #1e1e3a;border-radius:12px;backdrop-filter:blur(4px)}
+
+/* Sonar — top left */
+#sonar-panel{top:58px;left:8px;padding:10px 12px;min-width:120px}
+#sonar-panel h4{font-size:10px;color:#444;margin-bottom:8px;letter-spacing:1px;text-transform:uppercase}
+.s-row{display:flex;align-items:center;gap:5px;margin-bottom:5px;font-size:11px}
+.s-lbl{color:#555;width:24px;flex-shrink:0}
+.s-bg{flex:1;height:5px;background:#1a1a2e;border-radius:3px;overflow:hidden}
+.s-bar{height:5px;border-radius:3px;width:100%;transition:width 0.18s,background 0.18s}
+.s-val{color:#aaa;width:30px;text-align:right;flex-shrink:0}
+
+/* GPS info — top right */
+#gps-panel{top:58px;right:8px;padding:10px 12px;min-width:138px;font-size:11px}
+#gps-panel h4{font-size:10px;color:#444;margin-bottom:8px;letter-spacing:1px;text-transform:uppercase}
+.g-row{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px}
+.g-row span:first-child{color:#444}
+.g-row span:last-child{color:#ccc}
+#gps-src{font-size:10px;margin-top:6px;padding:3px 6px;border-radius:6px;text-align:center}
+#gps-src.phone{background:#0d2d16;color:#4ade80}
+#gps-src.esp  {background:#0d1a2d;color:#60a5fa}
+#gps-src.none {background:#1a1a2e;color:#444}
+
+/* Speed slider — bottom left */
+#speed-panel{bottom:12px;left:8px;padding:10px 12px;width:120px}
+#speed-panel label{font-size:11px;color:#444;display:block;margin-bottom:5px}
+#spd-slider{width:100%;accent-color:#4ade80}
+#spd-val{font-size:13px;color:#4ade80;text-align:center;margin-top:4px}
+
+/* AI mode — bottom center */
+#ai-btn{bottom:12px;left:50%;transform:translateX(-50%);padding:10px 22px;font-size:13px;cursor:pointer;color:#888;border-radius:20px;border:1px solid #1e1e3a}
+#ai-btn.active{color:#4ade80;border-color:#2d5e3d;background:rgba(10,30,10,0.9)}
+
+/* D-pad — bottom right */
+#dpad{bottom:12px;right:8px;padding:8px}
+.dpad-grid{display:grid;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px);gap:4px}
+.db{background:#0e0e22;border:1px solid #2a2a52;border-radius:9px;color:#c8c8ff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-tap-highlight-color:transparent;transition:background 0.08s;touch-action:none}
+.db:active,.db.on{background:#3a3a72}
+.db.stop{background:#1a0e0e;border-color:#522a2a;font-size:12px;color:#f87171}
+.db.stop:active,.db.stop.on{background:#4a1a1a}
+.db.empty{background:transparent;border-color:transparent;pointer-events:none}
+
+/* Follow btn */
+#follow-btn{position:absolute;bottom:80px;right:8px;z-index:400;background:rgba(8,8,20,0.92);border:1px solid #1e1e3a;border-radius:10px;padding:7px 12px;font-size:12px;cursor:pointer;color:#888}
+#follow-btn.active{color:#4ade80;border-color:#2d5e3d}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a href="/" id="back-btn">&#8592;</a>
+  <span id="b-conn" class="badge err">нет связи</span>
+  <span id="b-esp"  class="badge err">ESP: нет</span>
+  <span id="b-gps"  class="badge err">GPS: нет</span>
+  <span id="b-mode" class="badge warn">РУЧНОЙ</span>
+  <span id="b-obs"  class="badge" style="display:none">!</span>
+</div>
+
+<div id="map"></div>
+
+<!-- Sonar -->
+<div class="ov" id="sonar-panel">
+  <h4>Сонар (см)</h4>
+  <div class="s-row"><span class="s-lbl">Пер</span><div class="s-bg"><div class="s-bar" id="bf"></div></div><span class="s-val" id="vf">—</span></div>
+  <div class="s-row"><span class="s-lbl">Лев</span><div class="s-bg"><div class="s-bar" id="bl"></div></div><span class="s-val" id="vl">—</span></div>
+  <div class="s-row"><span class="s-lbl">Пра</span><div class="s-bg"><div class="s-bar" id="br"></div></div><span class="s-val" id="vr">—</span></div>
+  <div class="s-row"><span class="s-lbl">Зад</span><div class="s-bg"><div class="s-bar" id="bb"></div></div><span class="s-val" id="vb">—</span></div>
+</div>
+
+<!-- GPS info -->
+<div class="ov" id="gps-panel">
+  <h4>Геолокация</h4>
+  <div class="g-row"><span>Лат</span><span id="g-lat">—</span></div>
+  <div class="g-row"><span>Лнг</span><span id="g-lng">—</span></div>
+  <div class="g-row"><span>Скор</span><span id="g-spd">—</span></div>
+  <div class="g-row"><span>Точн</span><span id="g-acc">—</span></div>
+  <div id="gps-src" class="none">нет сигнала</div>
+</div>
+
+<!-- Speed -->
+<div class="ov" id="speed-panel">
+  <label>Скорость</label>
+  <input type="range" id="spd-slider" min="60" max="255" value="150">
+  <div id="spd-val">150</div>
+</div>
+
+<!-- AI mode -->
+<button class="ov" id="ai-btn">&#x1F916; Авто режим</button>
+
+<!-- Follow button -->
+<button id="follow-btn" class="active">&#x2316; Слежение</button>
+
+<!-- D-pad -->
+<div class="ov" id="dpad">
+  <div class="dpad-grid">
+    <div class="db empty"></div>
+    <button class="db" data-cmd="forward">&#8593;</button>
+    <div class="db empty"></div>
+    <button class="db" data-cmd="left">&#8592;</button>
+    <button class="db stop" data-cmd="stop">&#9632;</button>
+    <button class="db" data-cmd="right">&#8594;</button>
+    <div class="db empty"></div>
+    <button class="db" data-cmd="backward">&#8595;</button>
+    <div class="db empty"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ══════════════════════════════════════════════════════
+// Карта
+// ══════════════════════════════════════════════════════
+const map = L.map('map', { zoomControl: true, attributionControl: false })
+             .setView([41.2995, 69.2401], 16);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 20, opacity: 0.85
+}).addTo(map);
+
+// Иконка робота (зелёная точка)
+const robotIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:18px;height:18px;background:#4ade80;border:2.5px solid #0a0a12;border-radius:50%;box-shadow:0 0 10px #4ade80,0 0 20px rgba(74,222,128,0.4)"></div>',
+  iconSize: [18,18], iconAnchor: [9,9]
+});
+
+// Иконка телефона (синяя точка — позиция телефона = робота)
+const phoneIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:16px;height:16px;background:#60a5fa;border:2.5px solid #0a0a12;border-radius:50%;box-shadow:0 0 10px #60a5fa"></div>',
+  iconSize: [16,16], iconAnchor: [8,8]
+});
+
+let robotMarker = null;
+let trailPts    = [];
+let trailLine   = null;
+let mapFollow   = true;
+let lastGpsSrc  = 'none'; // 'phone' | 'esp' | 'none'
+
+function updateRobotPos(lat, lng, src) {
+  lastGpsSrc = src || 'phone';
+  const icon = lastGpsSrc === 'esp' ? robotIcon : phoneIcon;
+
+  if (!robotMarker) {
+    robotMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map);
+  } else {
+    robotMarker.setLatLng([lat, lng]);
+    robotMarker.setIcon(icon);
+  }
+  trailPts.push([lat, lng]);
+  if (trailPts.length > 500) trailPts.shift();
+  if (trailLine) map.removeLayer(trailLine);
+  trailLine = L.polyline(trailPts, {
+    color: lastGpsSrc === 'esp' ? '#4ade80' : '#60a5fa',
+    weight: 2, opacity: 0.45
+  }).addTo(map);
+
+  if (mapFollow) map.setView([lat, lng], map.getZoom(), { animate: true });
+}
+
+map.on('dragstart', () => {
+  mapFollow = false;
+  document.getElementById('follow-btn').classList.remove('active');
+});
+
+document.getElementById('follow-btn').addEventListener('click', () => {
+  mapFollow = !mapFollow;
+  document.getElementById('follow-btn').classList.toggle('active', mapFollow);
+});
+
+// Маркер цели навигации
+let targetMarker = null;
+function setTarget(lat, lng) {
+  if (targetMarker) map.removeLayer(targetMarker);
+  targetMarker = L.circleMarker([lat, lng], {
+    radius: 7, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.85
+  }).addTo(map).bindPopup('Цель').openPopup();
+}
+
+// ══════════════════════════════════════════════════════
+// Wake Lock — экран не засыпает
+// ══════════════════════════════════════════════════════
+(async function keepAwake() {
+  try {
+    const wl = await navigator.wakeLock.request('screen');
+    wl.addEventListener('release', keepAwake);
+  } catch(e) {}
+})();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible')
+    navigator.wakeLock?.request('screen').catch(()=>{});
+});
+
+// ══════════════════════════════════════════════════════
+// GPS ТЕЛЕФОНА — главный источник координат
+// Работает на HTTPS (Render.com) автоматически
+// ══════════════════════════════════════════════════════
+let phoneGpsActive = false;
+let phoneWatcher   = null;
+
+function startPhoneGps() {
+  if (!navigator.geolocation) {
+    setBadge('b-gps', 'GPS: нет API', 'err');
+    return;
+  }
+
+  const opts = {
+    enableHighAccuracy: true,   // использовать GPS чип, не только WiFi
+    maximumAge: 1000,           // кэш не старше 1 сек
+    timeout: 10000
+  };
+
+  phoneWatcher = navigator.geolocation.watchPosition(
+    pos => {
+      phoneGpsActive = true;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const spd = pos.coords.speed
+                  ? (pos.coords.speed * 3.6).toFixed(1) + ' км/ч'
+                  : '—';
+      const acc = pos.coords.accuracy.toFixed(0) + ' м';
+
+      // Показываем данные
+      document.getElementById('g-lat').textContent = lat.toFixed(5);
+      document.getElementById('g-lng').textContent = lng.toFixed(5);
+      document.getElementById('g-spd').textContent = spd;
+      document.getElementById('g-acc').textContent = acc;
+
+      const srcEl = document.getElementById('gps-src');
+      srcEl.textContent = '📱 Телефон';
+      srcEl.className = 'phone';
+
+      setBadge('b-gps', 'GPS ОК', 'ok');
+
+      // Двигаем маркер на карте
+      updateRobotPos(lat, lng, 'phone');
+
+      // Отправляем GPS на сервер → ESP может использовать для навигации
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({
+          type: 'phone_gps',
+          lat, lng,
+          accuracy: pos.coords.accuracy,
+          speed: pos.coords.speed || 0
+        }));
+      }
+    },
+    err => {
+      phoneGpsActive = false;
+      const msgs = {
+        1: 'Нет разрешения — разреши GPS в браузере',
+        2: 'Нет сигнала GPS',
+        3: 'Таймаут GPS'
+      };
+      setBadge('b-gps', 'GPS: ' + (msgs[err.code] || err.message), 'err');
+      document.getElementById('gps-src').textContent = msgs[err.code] || 'ошибка';
+      document.getElementById('gps-src').className = 'none';
+    },
+    opts
+  );
+}
+
+// Запускаем GPS сразу при загрузке страницы
+startPhoneGps();
+
+// ══════════════════════════════════════════════════════
+// WebSocket
+// ══════════════════════════════════════════════════════
+let ws = null, espId = null;
+let speed = 150, aiMode = false;
+const pressed = new Set();
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/browser`);
+
+  ws.onopen = () => setBadge('b-conn', 'ОК', 'ok');
+  ws.onclose = () => {
+    setBadge('b-conn', 'нет связи', 'err');
+    espId = null;
+    setBadge('b-esp', 'ESP: нет', 'err');
+    setTimeout(connectWS, 3000);
+  };
+  ws.onerror = () => {};
+  ws.onmessage = e => {
+    try {
+      const d = JSON.parse(e.data);
+      if      (d.type === 'esp_online')  onEspOnline(d);
+      else if (d.type === 'esp_offline') onEspOffline(d);
+      else if (d.type === 'sensors')     onSensors(d);
+      else if (d.type === 'gps')         onEspGps(d);   // GPS с ESP (запасной)
+    } catch(e) {}
+  };
+}
+connectWS();
+
+function sendCmd(cmd) {
+  if (!ws || ws.readyState !== 1 || !espId) return;
+  ws.send(JSON.stringify({ target: espId, type: 'cmd', cmd, speed }));
+}
+
+// ══════════════════════════════════════════════════════
+// ESP события
+// ══════════════════════════════════════════════════════
+function onEspOnline(d) {
+  espId = d.id;
+  setBadge('b-esp', 'ESP: ' + d.id, 'ok');
+}
+function onEspOffline(d) {
+  if (d.id === espId) { espId = null; setBadge('b-esp', 'ESP: нет', 'err'); }
+}
+
+function onSensors(d) {
+  const s = d.data || {};
+  const MAX = 200;
+  const map2 = [['f','front'],['l','left'],['r','right'],['b','rear']];
+  let hasObs = false;
+  map2.forEach(([dir, key]) => {
+    const v = s[key] ?? 400;
+    const pct = Math.min(100, (v / MAX) * 100);
+    const bar = document.getElementById('b' + dir);
+    bar.style.width = pct + '%';
+    if      (v < 20)  { bar.style.background = '#f87171'; hasObs = true; }
+    else if (v < 50)  bar.style.background = '#f59e0b';
+    else              bar.style.background = '#4ade80';
+    document.getElementById('v' + dir).textContent = v >= 400 ? '—' : v;
+  });
+  const obs = document.getElementById('b-obs');
+  if (hasObs) { obs.style.display=''; obs.textContent='⚠ препятствие'; obs.className='badge err'; }
+  else obs.style.display='none';
+}
+
+// GPS с ESP используется только если телефонный недоступен
+function onEspGps(d) {
+  if (phoneGpsActive) return;  // телефон работает — ESP GPS игнорируем
+  if (!d.lat || !d.lng) return;
+
+  document.getElementById('g-lat').textContent = d.lat.toFixed(5);
+  document.getElementById('g-lng').textContent = d.lng.toFixed(5);
+  document.getElementById('g-spd').textContent = (d.speed || 0).toFixed(1) + ' км/ч';
+  document.getElementById('g-acc').textContent = '—';
+
+  const srcEl = document.getElementById('gps-src');
+  srcEl.textContent = '📡 ESP модуль';
+  srcEl.className = 'esp';
+
+  setBadge('b-gps', 'GPS ESP', 'ok');
+  updateRobotPos(d.lat, d.lng, 'esp');
+}
+
+// ══════════════════════════════════════════════════════
+// D-pad
+// ══════════════════════════════════════════════════════
+document.querySelectorAll('.db[data-cmd]').forEach(btn => {
+  const cmd = btn.dataset.cmd;
+  const down = e => {
+    e.preventDefault();
+    btn.classList.add('on');
+    if (cmd === 'stop') { sendCmd('stop'); pressed.clear(); }
+    else { pressed.add(cmd); sendCmd(cmd); }
+  };
+  const up = e => {
+    btn.classList.remove('on');
+    if (cmd !== 'stop') {
+      pressed.delete(cmd);
+      sendCmd(pressed.size ? [...pressed][0] : 'stop');
+    }
+  };
+  btn.addEventListener('mousedown', down);
+  btn.addEventListener('touchstart', down, { passive: false });
+  btn.addEventListener('mouseup', up);
+  btn.addEventListener('touchend', up);
+  btn.addEventListener('mouseleave', up);
+  btn.addEventListener('touchcancel', up);
+});
+
+// Клавиатура
+const keyMap = {
+  ArrowUp:'forward', KeyW:'forward',
+  ArrowDown:'backward', KeyS:'backward',
+  ArrowLeft:'left', KeyA:'left',
+  ArrowRight:'right', KeyD:'right',
+  Space:'stop'
+};
+document.addEventListener('keydown', e => {
+  const cmd = keyMap[e.code]; if (!cmd) return;
+  e.preventDefault();
+  if (cmd === 'stop') { pressed.clear(); sendCmd('stop'); }
+  else if (!pressed.has(cmd)) { pressed.add(cmd); sendCmd(cmd); }
+});
+document.addEventListener('keyup', e => {
+  const cmd = keyMap[e.code]; if (!cmd || cmd === 'stop') return;
+  pressed.delete(cmd);
+  sendCmd(pressed.size ? [...pressed][0] : 'stop');
+});
+window.addEventListener('blur', () => { pressed.clear(); sendCmd('stop'); });
+
+// ══════════════════════════════════════════════════════
+// Скорость
+// ══════════════════════════════════════════════════════
+document.getElementById('spd-slider').addEventListener('input', function() {
+  speed = parseInt(this.value);
+  document.getElementById('spd-val').textContent = speed;
+});
+
+// ══════════════════════════════════════════════════════
+// Авто режим — клик на карту = цель для ESP
+// ══════════════════════════════════════════════════════
+document.getElementById('ai-btn').addEventListener('click', () => {
+  aiMode = !aiMode;
+  document.getElementById('ai-btn').classList.toggle('active', aiMode);
+  setBadge('b-mode', aiMode ? 'АВТО' : 'РУЧНОЙ', aiMode ? 'ok' : 'warn');
+  sendCmd(aiMode ? 'ai_on' : 'ai_off');
+});
+
+map.on('click', e => {
+  if (!aiMode || !espId || !ws || ws.readyState !== 1) return;
+  setTarget(e.latlng.lat, e.latlng.lng);
+  ws.send(JSON.stringify({
+    target: espId,
+    type: 'navigate',
+    lat: e.latlng.lat,
+    lng: e.latlng.lng
+  }));
+});
+
+// ══════════════════════════════════════════════════════
+// Helpers
+// ══════════════════════════════════════════════════════
+function setBadge(id, text, cls) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'badge ' + (cls || '');
+}
+</script>
+</body>
+</html>
