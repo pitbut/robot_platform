@@ -3,3 +3,4 @@ flask-sock>=0.7
 anthropic>=0.40
 python-dotenv>=1.0
 gunicorn>=21.0
+gTTS>=2.3
