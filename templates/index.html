@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>РџРёС‚ вЂ” Robot Platform</title>
+<title>Пит — Robot Platform</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0a12;color:#e0e0f0;font-family:system-ui,sans-serif;
@@ -39,40 +39,40 @@ h1{font-size:20px;font-weight:400;color:#333;letter-spacing:3px;text-transform:u
 <h1>Robot Platform</h1>
 
 <div class="cards">
-  <!-- РЎРЈР©Р•РЎРўР’РЈР®Р©РР• РџР РћР¤РР›Р вЂ” РќР• РўР РћР“РђРўР¬ -->
+  <!-- СУЩЕСТВУЮЩИЕ ПРОФИЛИ — НЕ ТРОГАТЬ -->
   <a href="/companion" class="card">
-    <div class="card-icon">рџ—Ј</div>
+    <div class="card-icon">🗣</div>
     <div class="card-text">
-      <h2>РЎРѕР±РµСЃРµРґРЅРёРє</h2>
-      <p>Р“РѕР»РѕСЃРѕРІРѕР№ AI-Р°СЃСЃРёСЃС‚РµРЅС‚ В· Bluetooth РєРѕР»РѕРЅРєР°</p>
+      <h2>Собеседник</h2>
+      <p>Голосовой AI-ассистент · Bluetooth колонка</p>
     </div>
   </a>
   <a href="/delivery" class="card">
-    <div class="card-icon">рџ¤–</div>
+    <div class="card-icon">🤖</div>
     <div class="card-text">
-      <h2>Р”РѕСЃС‚Р°РІС‰РёРє</h2>
-      <p>РљР°СЂС‚Р° В· РњР°СЂС€СЂСѓС‚ В· D-pad В· GPS В· РЎРѕРЅР°СЂС‹</p>
+      <h2>Доставщик</h2>
+      <p>Карта · Маршрут · D-pad · GPS · Сонары</p>
     </div>
   </a>
 
-  <!-- РќРћР’Р«Р™ РџР РћР¤РР›Р¬ -->
+  <!-- НОВЫЙ ПРОФИЛЬ -->
   <a href="/universal" class="card universal">
-    <div class="card-icon">рџ›ё</div>
+    <div class="card-icon">🛸</div>
     <div class="card-text">
-      <h2>РЈРЅРёРІРµСЂСЃР°Р»СЊРЅС‹Р№</h2>
-      <p>РљР°СЂС‚Р° + РљР°РјРµСЂР° + Р—РІСѓРє + Wake word + AI С‡Р°С‚<br>
-         <small style="color:#3d2d5e">РћС‚РєСЂРѕР№ /robot-phone РЅР° Р±РѕСЂС‚Сѓ</small></p>
+      <h2>Универсальный</h2>
+      <p>Карта + Камера + Звук + Wake word + AI чат<br>
+         <small style="color:#3d2d5e">Открой /robot-phone на борту</small></p>
     </div>
   </a>
 </div>
 
-<!-- РџРѕРґРєР»СЋС‡С‘РЅРЅС‹Рµ ESP РІ СЂРµР°Р»СЊРЅРѕРј РІСЂРµРјРµРЅРё -->
+<!-- Подключённые ESP в реальном времени -->
 <div class="esp-list">
-  <h3>РџРѕРґРєР»СЋС‡С‘РЅРЅС‹Рµ ESP</h3>
-  <div id="esp-cards"><div class="empty-esp">ESP РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹</div></div>
+  <h3>Подключённые ESP</h3>
+  <div id="esp-cards"><div class="empty-esp">ESP не подключены</div></div>
 </div>
 
-<div class="version">v1.0 В· robutpit.com</div>
+<div class="version">v1.0 · robutpit.com</div>
 
 <script>
 const espMap={};
@@ -88,8 +88,8 @@ ws.onmessage=e=>{
 function render(){
   const el=document.getElementById('esp-cards');
   const ids=Object.keys(espMap);
-  if(!ids.length){el.innerHTML='<div class="empty-esp">ESP РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹</div>';return;}
-  el.innerHTML=ids.map(id=>`<div class="esp-card"><div class="esp-dot ok"></div><span class="esp-name">${id}</span><span class="esp-caps">${(espMap[id].caps||[]).join(' В· ')}</span></div>`).join('');
+  if(!ids.length){el.innerHTML='<div class="empty-esp">ESP не подключены</div>';return;}
+  el.innerHTML=ids.map(id=>`<div class="esp-card"><div class="esp-dot ok"></div><span class="esp-name">${id}</span><span class="esp-caps">${(espMap[id].caps||[]).join(' · ')}</span></div>`).join('');
 }
 </script>
 </body>
