@@ -1,31 +1,96 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Robot Platform</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>РџРёС‚ вЂ” Robot Platform</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a12;color:#e0e0f0;font-family:system-ui,sans-serif;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:32px;padding:24px}
-h1{font-size:22px;font-weight:400;color:#888;letter-spacing:2px;text-transform:uppercase}
-.cards{display:flex;flex-direction:column;gap:16px;width:100%;max-width:360px}
-.card{display:flex;align-items:center;gap:16px;padding:20px 24px;background:#12121e;border:1px solid #2d2d5e;border-radius:16px;text-decoration:none;color:inherit}
-.card-icon{font-size:32px;width:48px;text-align:center}
-.card-text h2{font-size:18px;font-weight:500;margin-bottom:4px}
-.card-text p{font-size:13px;color:#666;line-height:1.4}
+body{background:#0a0a12;color:#e0e0f0;font-family:system-ui,sans-serif;
+  min-height:100dvh;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:28px;padding:24px}
+h1{font-size:20px;font-weight:400;color:#333;letter-spacing:3px;text-transform:uppercase}
+.cards{display:flex;flex-direction:column;gap:14px;width:100%;max-width:380px}
+.card{display:flex;align-items:center;gap:16px;padding:18px 22px;
+  background:#0e0e1a;border-radius:16px;text-decoration:none;color:inherit;
+  border:1px solid #1e1e3a;transition:border-color 0.2s}
+.card:active{border-color:#5d5dae}
+.card-icon{font-size:30px;width:44px;text-align:center;flex-shrink:0}
+.card-text h2{font-size:17px;font-weight:500;margin-bottom:3px}
+.card-text p{font-size:12px;color:#444;line-height:1.4}
+.card.universal{border-color:#3d2d5e}
+.card.universal:active{border-color:#c084fc}
+.card.universal .card-icon{filter:drop-shadow(0 0 6px #c084fc)}
+.esp-list{width:100%;max-width:380px}
+.esp-list h3{font-size:11px;color:#333;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;text-align:center}
+#esp-cards{display:flex;flex-direction:column;gap:8px}
+.esp-card{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:#0e0e1a;border-radius:12px;border:1px solid #1e1e3a;font-size:13px}
+.esp-dot{width:8px;height:8px;border-radius:50%;background:#222;flex-shrink:0}
+.esp-dot.ok{background:#4ade80;animation:pulse 2s ease-in-out infinite}
+.esp-name{flex:1;color:#888}
+.esp-caps{font-size:11px;color:#444}
+.empty-esp{font-size:12px;color:#2a2a4a;text-align:center;padding:10px}
+.version{font-size:10px;color:#1e1e3a}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 </style>
 </head>
 <body>
 <h1>Robot Platform</h1>
+
 <div class="cards">
+  <!-- РЎРЈР©Р•РЎРўР’РЈР®Р©РР• РџР РћР¤РР›Р вЂ” РќР• РўР РћР“РђРўР¬ -->
   <a href="/companion" class="card">
-    <div class="card-icon">🗣</div>
-    <div class="card-text"><h2>Собеседник</h2><p>Голосовой AI-ассистент</p></div>
+    <div class="card-icon">рџ—Ј</div>
+    <div class="card-text">
+      <h2>РЎРѕР±РµСЃРµРґРЅРёРє</h2>
+      <p>Р“РѕР»РѕСЃРѕРІРѕР№ AI-Р°СЃСЃРёСЃС‚РµРЅС‚ В· Bluetooth РєРѕР»РѕРЅРєР°</p>
+    </div>
   </a>
   <a href="/delivery" class="card">
-    <div class="card-icon">🤖</div>
-    <div class="card-text"><h2>Доставщик</h2><p>Управление по карте</p></div>
+    <div class="card-icon">рџ¤–</div>
+    <div class="card-text">
+      <h2>Р”РѕСЃС‚Р°РІС‰РёРє</h2>
+      <p>РљР°СЂС‚Р° В· РњР°СЂС€СЂСѓС‚ В· D-pad В· GPS В· РЎРѕРЅР°СЂС‹</p>
+    </div>
+  </a>
+
+  <!-- РќРћР’Р«Р™ РџР РћР¤РР›Р¬ -->
+  <a href="/universal" class="card universal">
+    <div class="card-icon">рџ›ё</div>
+    <div class="card-text">
+      <h2>РЈРЅРёРІРµСЂСЃР°Р»СЊРЅС‹Р№</h2>
+      <p>РљР°СЂС‚Р° + РљР°РјРµСЂР° + Р—РІСѓРє + Wake word + AI С‡Р°С‚<br>
+         <small style="color:#3d2d5e">РћС‚РєСЂРѕР№ /robot-phone РЅР° Р±РѕСЂС‚Сѓ</small></p>
+    </div>
   </a>
 </div>
+
+<!-- РџРѕРґРєР»СЋС‡С‘РЅРЅС‹Рµ ESP РІ СЂРµР°Р»СЊРЅРѕРј РІСЂРµРјРµРЅРё -->
+<div class="esp-list">
+  <h3>РџРѕРґРєР»СЋС‡С‘РЅРЅС‹Рµ ESP</h3>
+  <div id="esp-cards"><div class="empty-esp">ESP РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹</div></div>
+</div>
+
+<div class="version">v1.0 В· robutpit.com</div>
+
+<script>
+const espMap={};
+const proto=location.protocol==='https:'?'wss':'ws';
+const ws=new WebSocket(`${proto}://${location.host}/ws/browser`);
+ws.onmessage=e=>{
+  try{
+    const d=JSON.parse(e.data);
+    if(d.type==='esp_online'){espMap[d.id]={caps:d.caps||[]};render();}
+    else if(d.type==='esp_offline'){delete espMap[d.id];render();}
+  }catch(e){}
+};
+function render(){
+  const el=document.getElementById('esp-cards');
+  const ids=Object.keys(espMap);
+  if(!ids.length){el.innerHTML='<div class="empty-esp">ESP РЅРµ РїРѕРґРєР»СЋС‡РµРЅС‹</div>';return;}
+  el.innerHTML=ids.map(id=>`<div class="esp-card"><div class="esp-dot ok"></div><span class="esp-name">${id}</span><span class="esp-caps">${(espMap[id].caps||[]).join(' В· ')}</span></div>`).join('');
+}
+</script>
 </body>
 </html>
