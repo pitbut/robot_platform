@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Пит — Борт</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050510;color:#e0e0f0;font-family:system-ui,sans-serif;
+  height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px}
+#status{font-size:13px;color:#444;text-align:center;line-height:1.8}
+.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#222;margin-right:4px;vertical-align:middle}
+.dot.ok{background:#4ade80;animation:pulse 2s ease-in-out infinite}
+.dot.err{background:#f87171}
+.badge{padding:4px 12px;border-radius:10px;font-size:12px;background:#0e0e1a;border:1px solid #1e1e3a;color:#666}
+.badge.ok{background:#0d2d16;color:#4ade80;border-color:#1a5e2e}
+.badge.err{background:#2d0d0d;color:#f87171;border-color:#5e1a1a}
+h2{font-size:18px;font-weight:400;color:#333}
+#log{font-size:11px;color:#2a2a4a;text-align:center;max-width:320px;line-height:1.6}
+video{display:none}
+canvas{display:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+</style>
+</head>
+<body>
+<h2>🤖 Пит — бортовой модуль</h2>
+
+<div class="row">
+  <span class="badge" id="b-ws">Сервер...</span>
+  <span class="badge" id="b-cam">Камера...</span>
+  <span class="badge" id="b-mic">Микрофон...</span>
+  <span class="badge" id="b-gps">GPS...</span>
+</div>
+
+<div id="status">Инициализация...</div>
+<div id="log"></div>
+
+<video id="vid" autoplay playsinline muted></video>
+<canvas id="cvs"></canvas>
+<audio id="playback" autoplay></audio>
+
+<script>
+// ════════════════════════════════════════════════════
+// WAKE LOCK — экран не гаснет
+// ════════════════════════════════════════════════════
+(async function wl(){
+  try{ const w=await navigator.wakeLock.request('screen'); w.addEventListener('release',wl); }catch(e){}
+})();
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible') navigator.wakeLock?.request('screen').catch(()=>{});
+});
+
+// ════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════
+let ws=null, frameTimer=null, micRecorder=null;
+let wakeMode=true, wakeActive=false, wakeTimeout=null;
+const WAKE_WORDS=['робот','robot','эй робот','пит','pit'];
+const VOICE_CMDS={
+  'стоп':'stop','stop':'stop',
+  'домой':'home','home':'home',
+  'поехали':'go','go':'go',
+  'сбросить':'reset','reset':'reset'
+};
+
+function setB(id,txt,cls){const el=document.getElementById(id);el.textContent=txt;el.className='badge '+(cls||'');}
+function log(msg){document.getElementById('log').textContent=msg;}
+function setStatus(msg){document.getElementById('status').textContent=msg;}
+
+// ════════════════════════════════════════════════════
+// WEBSOCKET
+// ════════════════════════════════════════════════════
+function connect(){
+  const proto=location.protocol==='https:'?'wss':'ws';
+  ws=new WebSocket(`${proto}://${location.host}/ws/robot-phone`);
+  ws.onopen=()=>{setB('b-ws','Сервер ОК','ok');setStatus('Подключён к серверу');startAll();};
+  ws.onclose=()=>{setB('b-ws','Нет связи','err');setStatus('Нет связи, переподключаюсь...');setTimeout(connect,3000);};
+  ws.onerror=()=>{};
+  ws.onmessage=e=>{
+    try{
+      const d=JSON.parse(e.data);
+      if(d.type==='speak') speakText(d.text||'');
+      if(d.type==='play_operator_voice') playOpVoice(d.data||'');
+    }catch(e){}
+  };
+}
+connect();
+
+// ════════════════════════════════════════════════════
+// ЗАПУСК ВСЕГО
+// ════════════════════════════════════════════════════
+async function startAll(){
+  await startCamera();
+  await startMic();
+  startGPS();
+  startWakeWord();
+}
+
+// ════════════════════════════════════════════════════
+// КАМЕРА — снимает кадры и шлёт на сервер
+// ════════════════════════════════════════════════════
+async function startCamera(){
+  try{
+    const vid=document.getElementById('vid');
+    const cvs=document.getElementById('cvs');
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:640,height:480},audio:false
+    });
+    vid.srcObject=stream;
+    await vid.play();
+    cvs.width=320; cvs.height=240;
+    setB('b-cam','Камера ОК','ok');
+    // Шлём 5 кадров/сек
+    frameTimer=setInterval(()=>{
+      if(!ws||ws.readyState!==1) return;
+      const ctx=cvs.getContext('2d');
+      ctx.drawImage(vid,0,0,320,240);
+      const b64=cvs.toDataURL('image/jpeg',0.55).split(',')[1];
+      ws.send(JSON.stringify({type:'frame',data:b64}));
+    },200);
+    log('Камера: 320×240 5fps JPEG');
+  }catch(e){
+    setB('b-cam','Камера: нет','err');
+    log('Ошибка камеры: '+e.message);
+  }
+}
+
+// ════════════════════════════════════════════════════
+// МИКРОФОН — стримит аудио на сервер
+// ════════════════════════════════════════════════════
+async function startMic(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    // MediaRecorder с таймслайсом 300мс
+    const options={mimeType:'audio/webm;codecs=opus'};
+    if(!MediaRecorder.isTypeSupported(options.mimeType)) delete options.mimeType;
+    micRecorder=new MediaRecorder(stream,options);
+    micRecorder.ondataavailable=async e=>{
+      if(!e.data||e.data.size===0||!ws||ws.readyState!==1) return;
+      const ab=await e.data.arrayBuffer();
+      const b64=btoa(String.fromCharCode(...new Uint8Array(ab)));
+      ws.send(JSON.stringify({type:'audio_chunk',data:b64,mime:micRecorder.mimeType||'audio/webm'}));
+    };
+    micRecorder.start(300);
+    setB('b-mic','Микрофон ОК','ok');
+  }catch(e){
+    setB('b-mic','Mic: нет','err');
+    log('Ошибка mic: '+e.message);
+  }
+}
+
+// ════════════════════════════════════════════════════
+// GPS
+// ════════════════════════════════════════════════════
+function startGPS(){
+  if(!navigator.geolocation){setB('b-gps','GPS: нет API','err');return;}
+  navigator.geolocation.watchPosition(pos=>{
+    setB('b-gps','GPS ОК ±'+pos.coords.accuracy.toFixed(0)+'м','ok');
+    if(ws&&ws.readyState===1){
+      ws.send(JSON.stringify({type:'gps',lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy}));
+    }
+  },()=>setB('b-gps','GPS: нет','err'),{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+}
+
+// ════════════════════════════════════════════════════
+// WAKE WORD — слушает "РОБОТ", голосовые команды
+// ════════════════════════════════════════════════════
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let sr=null, srRunning=false;
+
+function startWakeWord(){
+  if(!SR) return;
+  function run(){
+    if(!wakeMode&&!srRunning) return;
+    sr=new SR();
+    sr.lang='ru-RU'; sr.continuous=false; sr.interimResults=false; sr.maxAlternatives=5;
+    sr.onstart=()=>srRunning=true;
+    sr.onend=()=>{srRunning=false; setTimeout(run,150);};
+    sr.onerror=e=>{ if(e.error!=='no-speech') srRunning=false; setTimeout(run,300); };
+    sr.onresult=e=>{
+      for(let i=0;i<e.results.length;i++){
+        for(let j=0;j<e.results[i].length;j++){
+          const t=e.results[i][j].transcript.toLowerCase().trim();
+
+          // Голосовые команды (работают всегда)
+          for(const [phrase,cmd] of Object.entries(VOICE_CMDS)){
+            if(t.includes(phrase)){
+              if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'voice_command',cmd,phrase:t}));
+              setStatus('Команда: '+cmd);
+              return;
+            }
+          }
+
+          // Wake word
+          if(wakeMode&&!wakeActive){
+            if(WAKE_WORDS.some(w=>t.includes(w))){
+              wakeActive=true;
+              setStatus('👂 Слушаю...');
+              speakText('Да?');
+              if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'wake_word',phrase:t}));
+              clearTimeout(wakeTimeout);
+              wakeTimeout=setTimeout(()=>{wakeActive=false;setStatus('Жду команду...');},30000);
+            }
+          }
+        }
+      }
+    };
+    try{sr.start();}catch(e){}
+  }
+  run();
+}
+
+// ════════════════════════════════════════════════════
+// TTS — произносит текст на борту
+// ════════════════════════════════════════════════════
+let ttsQueue=[], ttsBusy=false;
+function speakText(text){
+  ttsQueue.push(text);
+  if(!ttsBusy) processQueue();
+}
+async function processQueue(){
+  if(!ttsQueue.length){ttsBusy=false;return;}
+  ttsBusy=true;
+  const text=ttsQueue.shift();
+  // Пауза запись mic на время TTS чтоб не было эха
+  if(micRecorder&&micRecorder.state==='recording') micRecorder.pause();
+  try{
+    const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,lang:'ru'})});
+    if(r.ok){
+      const url=URL.createObjectURL(await r.blob());
+      const a=new Audio(url);
+      a.onended=()=>{URL.revokeObjectURL(url);if(micRecorder&&micRecorder.state==='paused')micRecorder.resume();processQueue();};
+      a.play();
+    }else{
+      if(micRecorder&&micRecorder.state==='paused') micRecorder.resume();
+      processQueue();
+    }
+  }catch(e){
+    if(micRecorder&&micRecorder.state==='paused') micRecorder.resume();
+    processQueue();
+  }
+}
+
+// ════════════════════════════════════════════════════
+// ВОСПРОИЗВЕДЕНИЕ ГОЛОСА ОПЕРАТОРА
+// ════════════════════════════════════════════════════
+// Накапливаем чанки и воспроизводим через MediaSource
+let msSource=null, msBuffer=null, msQueue=[], msBusy=false;
+const playback=document.getElementById('playback');
+
+function initMediaSource(){
+  msSource=new MediaSource();
+  playback.src=URL.createObjectURL(msSource);
+  msSource.addEventListener('sourceopen',()=>{
+    try{msBuffer=msSource.addSourceBuffer('audio/webm;codecs=opus');}catch(e){
+      try{msBuffer=msSource.addSourceBuffer('audio/webm');}catch(e2){}
+    }
+    if(msBuffer){
+      msBuffer.addEventListener('updateend',()=>{msBusy=false;drainQueue();});
+    }
+  });
+}
+function drainQueue(){
+  if(msBusy||!msBuffer||msBuffer.updating||!msQueue.length) return;
+  msBusy=true;
+  msBuffer.appendBuffer(msQueue.shift());
+  if(playback.paused) playback.play().catch(()=>{});
+}
+
+function playOpVoice(b64){
+  if(!msSource||msSource.readyState!=='open'){initMediaSource();setTimeout(()=>playOpVoice(b64),200);return;}
+  const bin=atob(b64);
+  const buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  msQueue.push(buf.buffer);
+  drainQueue();
+}
+
+initMediaSource();
+</script>
+</body>
+</html>

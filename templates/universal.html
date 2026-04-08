@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Пит — Универсальный</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a12;--bg2:#0e0e1a;--bg3:#161626;--bd:#1e1e3a;
+  --green:#4ade80;--amber:#f59e0b;--blue:#60a5fa;--purple:#c084fc;--red:#f87171;
+}
+body{background:var(--bg);color:#e0e0f0;font-family:system-ui,sans-serif;
+  height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── TOP BAR ── */
+#topbar{
+  display:flex;align-items:center;gap:5px;padding:6px 10px;
+  background:rgba(6,6,16,0.97);border-bottom:1px solid var(--bd);
+  flex-shrink:0;z-index:900;flex-wrap:wrap;
+}
+.badge{padding:2px 8px;border-radius:8px;font-size:11px;white-space:nowrap;cursor:default}
+.badge.ok{background:#0d2d16;color:var(--green);border:1px solid #1a5e2e}
+.badge.err{background:#2d0d0d;color:var(--red);border:1px solid #5e1a1a}
+.badge.warn{background:#2d1f0d;color:var(--amber);border:1px solid #5e3e1a}
+.badge.blue{background:#060e1a;color:var(--blue);border:1px solid #1a3a5e}
+.badge.purple{background:#160d26;color:var(--purple);border:1px solid #3d2d5e}
+#topbar a{color:#333;text-decoration:none;font-size:13px;margin-right:4px}
+
+/* ── MAIN LAYOUT ── */
+#main{flex:1;display:flex;overflow:hidden}
+
+/* ── LEFT PANEL: Camera + Chat ── */
+#left-panel{
+  width:260px;flex-shrink:0;display:flex;flex-direction:column;
+  border-right:1px solid var(--bd);background:var(--bg2);
+}
+@media(max-width:600px){
+  #left-panel{display:none}
+  #left-panel.show{display:flex;position:absolute;left:0;top:40px;bottom:0;z-index:800;width:240px}
+}
+
+/* Camera view */
+#cam-view{position:relative;flex-shrink:0;background:#020208}
+#cam-img{width:100%;display:block;min-height:80px;background:#020208}
+#cam-no{padding:20px;text-align:center;font-size:12px;color:#2a2a4a}
+#cam-overlay{position:absolute;bottom:4px;left:4px;right:4px;background:rgba(5,5,16,0.88);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--purple);display:none;line-height:1.4}
+#cam-overlay.show{display:block}
+#cam-btns{display:flex;gap:4px;padding:6px 8px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.cam-btn{flex:1;padding:5px 4px;border-radius:7px;border:1px solid var(--bd);background:var(--bg3);color:#666;font-size:11px;cursor:pointer;text-align:center}
+.cam-btn.active{background:#0d2d16;color:var(--green);border-color:#1a5e2e}
+.cam-btn.red{background:#2d0d0d;color:var(--red);border-color:#5e1a1a}
+
+/* Audio controls */
+#audio-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--bd);flex-shrink:0;font-size:11px}
+#audio-bar span{color:#444;flex:1}
+#talk-btn{
+  padding:5px 12px;border-radius:8px;border:1px solid var(--bd);
+  background:var(--bg3);color:#666;font-size:12px;cursor:pointer;
+  user-select:none;-webkit-tap-highlight-color:transparent;
+}
+#talk-btn.active{background:#2d1f0d;color:var(--amber);border-color:#5e3e1a}
+#audio-indicator{width:8px;height:8px;border-radius:50%;background:#222;flex-shrink:0}
+#audio-indicator.ok{background:var(--green);animation:pulse 1s ease-in-out infinite}
+
+/* Chat */
+#chat-area{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:7px}
+.msg{max-width:95%;padding:7px 10px;border-radius:14px;font-size:13px;line-height:1.45;animation:fadeUp 0.2s ease}
+.msg.user{align-self:flex-end;background:#2a2a52;color:#cfd0ff;border-bottom-right-radius:2px}
+.msg.bot{align-self:flex-start;background:var(--bg3);border:1px solid var(--bd);border-bottom-left-radius:2px}
+.msg.vision{align-self:flex-start;background:#160d26;color:var(--purple);font-style:italic;border:1px solid #3d2d5e;font-size:12px}
+.msg.sys{align-self:center;background:#0d2d16;color:var(--green);border:1px solid #1a5e2e;border-radius:9px;font-size:11px;padding:3px 10px}
+.msg.thinking{color:#444;font-style:italic;align-self:flex-start;background:var(--bg3);border:1px solid var(--bd);font-size:13px}
+.msg.err{align-self:stretch;background:#2d0d0d;color:var(--red);font-size:11px;border-radius:8px}
+
+/* Chat input */
+#chat-input-row{display:flex;gap:5px;padding:6px 8px;border-top:1px solid var(--bd);flex-shrink:0}
+#chat-inp{flex:1;background:var(--bg3);border:1px solid #2a2a52;border-radius:16px;padding:7px 12px;color:#e0e0f0;font-size:13px;outline:none}
+#chat-inp:focus{border-color:#5d5dae}
+.icon-btn{background:var(--bg3);border:1px solid var(--bd);border-radius:50%;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.icon-btn.active{background:#160d26;border-color:#3d2d5e}
+
+/* ── RIGHT: Map + Controls ── */
+#right-panel{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden}
+#map{flex:1;z-index:1;min-height:200px}
+.leaflet-container{background:#0d0d1a}
+.ov{position:absolute;z-index:400;background:rgba(8,8,20,0.93);border:1px solid var(--bd);border-radius:10px;backdrop-filter:blur(4px)}
+
+/* Sonar */
+#sonar-panel{top:8px;left:8px;padding:8px 10px;min-width:108px}
+#sonar-panel h4{font-size:9px;color:#2a2a4a;margin-bottom:5px;letter-spacing:1px;text-transform:uppercase}
+.s-row{display:flex;align-items:center;gap:4px;margin-bottom:3px;font-size:10px}
+.s-lbl{color:#333;width:22px;flex-shrink:0}
+.s-bg{flex:1;height:4px;background:#1a1a2e;border-radius:2px;overflow:hidden}
+.s-bar{height:4px;border-radius:2px;width:100%;transition:width 0.2s,background 0.2s}
+.s-val{color:#666;width:26px;text-align:right;font-size:10px}
+
+/* Waypoints */
+#wp-panel{top:8px;right:8px;padding:10px 12px;width:196px;max-height:260px;display:flex;flex-direction:column;gap:6px}
+#wp-panel h4{font-size:9px;color:#2a2a4a;letter-spacing:1px;text-transform:uppercase}
+#wp-list{overflow-y:auto;display:flex;flex-direction:column;gap:3px;max-height:110px}
+.wpi{display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:6px;background:#0e0e22;border:1px solid var(--bd);font-size:10px}
+.wpi.active{border-color:var(--green);background:#0a1f12}
+.wpi.done{opacity:0.3}
+.wpi-n{color:#222;width:13px;font-size:9px}
+.wpi-c{flex:1;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}
+.wpi-x{background:none;border:none;color:var(--red);cursor:pointer;font-size:11px;padding:0 1px}
+#nav-row1{display:flex;gap:4px}
+#nav-start{flex:1;padding:5px;border-radius:6px;border:1px solid #1a5e2e;background:#0d2d16;color:var(--green);cursor:pointer;font-size:11px}
+#nav-start:disabled{opacity:0.4;cursor:not-allowed}
+#nav-stop{padding:5px 7px;border-radius:6px;border:1px solid #5e1a1a;background:#2d0d0d;color:var(--red);cursor:pointer;font-size:11px}
+#nav-stop:disabled{opacity:0.4}
+#nav-row2{display:flex;gap:4px}
+#nav-base,#nav-stay{flex:1;padding:4px;border-radius:6px;border:1px solid var(--bd);background:var(--bg3);color:#666;cursor:pointer;font-size:10px}
+#nav-clear{width:100%;padding:3px;border-radius:6px;border:none;background:transparent;color:#2a2a4a;cursor:pointer;font-size:10px}
+#nav-status{font-size:10px;text-align:center;color:#2a2a4a;min-height:13px}
+#nav-status.ok{color:var(--green)}
+#nav-status.warn{color:var(--amber)}
+#nav-status.err{color:var(--red)}
+
+/* Bottom controls */
+#map-bottom{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  display:flex;gap:8px;align-items:flex-end;z-index:400;pointer-events:none}
+#spd-wrap{background:rgba(8,8,20,0.93);border:1px solid var(--bd);border-radius:9px;
+  padding:7px 10px;width:100px;pointer-events:all}
+#spd-wrap label{font-size:10px;color:#444;display:block;margin-bottom:3px}
+#spd-slider{width:100%;accent-color:var(--green)}
+#spd-val{font-size:11px;color:var(--green);text-align:center;margin-top:2px}
+#dpad{background:rgba(8,8,20,0.93);border:1px solid var(--bd);border-radius:9px;padding:5px;pointer-events:all}
+.dg{display:grid;grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px);gap:3px}
+.db{background:var(--bg3);border:1px solid #2a2a52;border-radius:7px;color:#c8c8ff;font-size:17px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  user-select:none;-webkit-tap-highlight-color:transparent;transition:background 0.08s;touch-action:none}
+.db:active,.db.on{background:#3a3a72}
+.db.stp{background:#1a0e0e;border-color:#522a2a;color:var(--red);font-size:10px}
+.db.stp:active,.db.stp.on{background:#4a1a1a}
+.db.mt{background:transparent;border:none;pointer-events:none}
+
+/* Wake/Mic toggle floating */
+#mic-float{bottom:8px;left:8px;padding:6px 10px;font-size:11px}
+#mic-float-inner{display:flex;flex-direction:column;gap:4px}
+.mf-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#444;cursor:pointer}
+.mf-row input{width:13px;height:13px;accent-color:var(--green);cursor:pointer}
+#wake-indicator{font-size:10px;color:#2a2a4a;margin-top:2px}
+#wake-indicator.active{color:var(--amber)}
+
+/* Mobile toggle left panel */
+#toggle-left{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:500;
+  padding:4px 12px;background:rgba(8,8,20,0.9);border:1px solid var(--bd);border-radius:8px;
+  font-size:11px;color:#444;cursor:pointer;display:none}
+@media(max-width:600px){#toggle-left{display:block}}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <a href="/">← меню</a>
+  <span id="b-srv"  class="badge err">Сервер</span>
+  <span id="b-rob"  class="badge err">Робот: нет</span>
+  <span id="b-esp"  class="badge err">ESP: нет</span>
+  <span id="b-gps"  class="badge err">GPS: нет</span>
+  <span id="b-mode" class="badge warn">РУЧНОЙ</span>
+  <span id="b-obs"  class="badge" style="display:none"></span>
+</div>
+
+<div id="main">
+
+  <!-- ══════ LEFT PANEL ══════ -->
+  <div id="left-panel">
+
+    <!-- Camera -->
+    <div id="cam-view">
+      <img id="cam-img" src="" alt="" style="display:none">
+      <div id="cam-no">Камера не подключена.<br><small>Открой /robot-phone на борту</small></div>
+      <div id="cam-overlay"></div>
+    </div>
+
+    <div id="cam-btns">
+      <div class="cam-btn active" id="btn-cam-on">📷 Камера</div>
+      <div class="cam-btn" id="btn-analyze">🔍 Анализ</div>
+    </div>
+
+    <!-- Audio -->
+    <div id="audio-bar">
+      <div id="audio-indicator"></div>
+      <span id="audio-label">Звук робота</span>
+      <button id="talk-btn">🎙 Говорить</button>
+    </div>
+
+    <!-- Chat -->
+    <div id="chat-area">
+      <div class="msg sys">Профиль "Универсальный" активен</div>
+    </div>
+
+    <div id="chat-input-row">
+      <input id="chat-inp" type="text" placeholder="Сообщение..." autocomplete="off">
+      <button class="icon-btn" id="chat-send">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#c8c8ff"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4z"/></svg>
+      </button>
+      <button class="icon-btn" id="chat-mic">🎙</button>
+    </div>
+  </div>
+
+  <!-- ══════ RIGHT PANEL ══════ -->
+  <div id="right-panel">
+    <button id="toggle-left">📷 Панель</button>
+    <div id="map"></div>
+
+    <!-- Sonar -->
+    <div class="ov" id="sonar-panel">
+      <h4>Сонар (см)</h4>
+      <div class="s-row"><span class="s-lbl">Пер</span><div class="s-bg"><div class="s-bar" id="bf"></div></div><span class="s-val" id="vf">—</span></div>
+      <div class="s-row"><span class="s-lbl">Лев</span><div class="s-bg"><div class="s-bar" id="bl"></div></div><span class="s-val" id="vl">—</span></div>
+      <div class="s-row"><span class="s-lbl">Пра</span><div class="s-bg"><div class="s-bar" id="br"></div></div><span class="s-val" id="vr">—</span></div>
+      <div class="s-row"><span class="s-lbl">Зад</span><div class="s-bg"><div class="s-bar" id="bb"></div></div><span class="s-val" id="vb">—</span></div>
+    </div>
+
+    <!-- Waypoints -->
+    <div class="ov" id="wp-panel">
+      <h4>⚑ Маршрут</h4>
+      <div id="wp-list"><div style="font-size:10px;color:#2a2a4a;text-align:center;padding:5px">Нажми на карту</div></div>
+      <div id="nav-row1">
+        <button id="nav-start" disabled>▶ Старт</button>
+        <button id="nav-stop"  disabled>■ Стоп</button>
+      </div>
+      <div id="nav-row2">
+        <button id="nav-base">⌂ На базу</button>
+        <button id="nav-stay">◉ Остаться</button>
+      </div>
+      <button id="nav-clear">✕ Сбросить всё</button>
+      <div id="nav-status"></div>
+    </div>
+
+    <!-- Mic/wake toggles -->
+    <div class="ov" id="mic-float">
+      <div id="mic-float-inner">
+        <label class="mf-row"><input type="checkbox" id="chk-wake" checked> ⚡ Wake «РОБОТ»</label>
+        <label class="mf-row"><input type="checkbox" id="chk-always"> 🎙 Mic всегда</label>
+        <div id="wake-indicator">Ожидание...</div>
+      </div>
+    </div>
+
+    <!-- Speed + D-pad -->
+    <div id="map-bottom">
+      <div id="spd-wrap">
+        <label>Скорость</label>
+        <input type="range" id="spd-slider" min="60" max="255" value="150">
+        <div id="spd-val">150</div>
+      </div>
+      <div id="dpad">
+        <div class="dg">
+          <div class="db mt"></div>
+          <button class="db" data-cmd="forward">↑</button>
+          <div class="db mt"></div>
+          <button class="db" data-cmd="left">←</button>
+          <button class="db stp" data-cmd="stop">■</button>
+          <button class="db" data-cmd="right">→</button>
+          <div class="db mt"></div>
+          <button class="db" data-cmd="backward">↓</button>
+          <div class="db mt"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden audio player for robot's mic -->
+<audio id="robot-audio" autoplay style="display:none"></audio>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ════════════════════════════════════════════════════
+// WAKE LOCK
+// ════════════════════════════════════════════════════
+(async function wl(){
+  try{const w=await navigator.wakeLock.request('screen');w.addEventListener('release',wl);}catch(e){}
+})();
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible') navigator.wakeLock?.request('screen').catch(()=>{});
+});
+
+// ════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════
+let ws=null, espId=null, speed=150;
+let navActive=false, navPaused=false, currentWP=0;
+let waypoints=[], basePos=null, routeLine=null;
+let camSubscribed=false, robotOnline=false;
+let history=[], aiPending=false;
+let opRecorder=null; // оператор говорит
+
+// ════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════
+function setB(id,txt,cls){const el=document.getElementById(id);if(el){el.textContent=txt;el.className='badge '+(cls||'');}}
+function addMsg(text,role){
+  const d=document.createElement('div');d.className='msg '+role;d.textContent=text;
+  const ca=document.getElementById('chat-area');ca.appendChild(d);ca.scrollTop=ca.scrollHeight;return d;
+}
+function setNavStatus(msg,cls){const el=document.getElementById('nav-status');el.textContent=msg;el.className=cls||'';}
+
+// ════════════════════════════════════════════════════
+// WEBSOCKET → СЕРВЕР
+// ════════════════════════════════════════════════════
+function connectWS(){
+  const proto=location.protocol==='https:'?'wss':'ws';
+  ws=new WebSocket(`${proto}://${location.host}/ws/universal`);
+  ws.onopen=()=>{setB('b-srv','Сервер ОК','ok');subscribeCam();};
+  ws.onclose=()=>{setB('b-srv','Нет связи','err');setTimeout(connectWS,3000);};
+  ws.onerror=()=>{};
+  ws.onmessage=onMessage;
+}
+connectWS();
+
+function subscribeCam(){
+  if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'cam_subscribe'}));camSubscribed=true;}
+}
+
+function onMessage(e){
+  let d;
+  try{d=JSON.parse(e.data);}catch(err){return;}
+  const t=d.type;
+
+  if(t==='robot_online'){
+    robotOnline=true;setB('b-rob','Робот: онлайн','ok');
+    addMsg('Телефон робота подключён','sys');
+  }
+  else if(t==='robot_offline'){
+    robotOnline=false;setB('b-rob','Робот: нет','err');
+    document.getElementById('cam-img').style.display='none';
+    document.getElementById('cam-no').style.display='';
+    setB('b-gps','GPS: нет','err');
+    addMsg('Телефон робота отключился','sys');
+  }
+  else if(t==='esp_online'){espId=d.id;setB('b-esp','ESP: '+d.id,'ok');}
+  else if(t==='esp_offline'){espId=null;setB('b-esp','ESP: нет','err');}
+  else if(t==='frame')    onFrame(d.data);
+  else if(t==='robot_gps')onRobotGPS(d);
+  else if(t==='sensors')  onSensors(d);
+  else if(t==='nav_progress') onNavProgress(d);
+  else if(t==='nav_done')     onNavDone();
+  else if(t==='wake_word'){
+    document.getElementById('wake-indicator').textContent='👂 Слушает...';
+    document.getElementById('wake-indicator').className='active';
+    addMsg('Сказали «РОБОТ» — слушаю','sys');
+    setTimeout(()=>{document.getElementById('wake-indicator').textContent='Ожидание...';document.getElementById('wake-indicator').className='';},31000);
+  }
+  else if(t==='voice_command') onVoiceCmd(d.cmd);
+  else if(t==='audio_chunk')   onRobotAudio(d.data, d.mime||'audio/webm');
+}
+
+// ════════════════════════════════════════════════════
+// КАМЕРА — получаем кадры, показываем
+// ════════════════════════════════════════════════════
+const camImg=document.getElementById('cam-img');
+const camNo=document.getElementById('cam-no');
+let lastFrameTime=0;
+
+function onFrame(b64){
+  if(!b64) return;
+  camImg.src='data:image/jpeg;base64,'+b64;
+  camImg.style.display='block';
+  camNo.style.display='none';
+  lastFrameTime=Date.now();
+}
+
+document.getElementById('btn-cam-on').addEventListener('click',()=>{
+  camSubscribed=!camSubscribed;
+  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:camSubscribed?'cam_subscribe':'cam_unsubscribe'}));
+  document.getElementById('btn-cam-on').classList.toggle('active',camSubscribed);
+});
+
+document.getElementById('btn-analyze').addEventListener('click',async()=>{
+  if(!camImg.src||!camImg.src.includes('base64')) {addMsg('Нет кадра для анализа','err');return;}
+  const b64=camImg.src.split(',')[1];
+  addMsg('Анализирую кадр...','thinking');
+  try{
+    const r=await fetch('/api/vision',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:b64,history:history.slice(-4)})});
+    const data=await r.json();
+    document.querySelector('.msg.thinking')?.remove();
+    if(data.ok){
+      addMsg(data.reply,'vision');
+      history.push({role:'assistant',content:'[вижу]: '+data.reply});
+      speak(data.reply);
+    }else addMsg('Ошибка анализа: '+data.error,'err');
+  }catch(ex){addMsg('Ошибка: '+ex.message,'err');}
+});
+
+// ════════════════════════════════════════════════════
+// ЗВУК С МИКРОФОНА РОБОТА
+// ════════════════════════════════════════════════════
+const robotAudioEl=document.getElementById('robot-audio');
+let ms=null, msBuffer=null, msQueue=[], msBusy=false;
+
+function initMS(){
+  ms=new MediaSource();
+  robotAudioEl.src=URL.createObjectURL(ms);
+  ms.addEventListener('sourceopen',()=>{
+    const types=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'];
+    for(const t of types){
+      if(MediaSource.isTypeSupported(t)){
+        try{msBuffer=ms.addSourceBuffer(t);break;}catch(e){}
+      }
+    }
+    if(msBuffer){
+      msBuffer.addEventListener('updateend',()=>{msBusy=false;drainMS();});
+    }
+  });
+}
+function drainMS(){
+  if(msBusy||!msBuffer||msBuffer.updating||!msQueue.length) return;
+  msBusy=true;
+  try{msBuffer.appendBuffer(msQueue.shift());}catch(e){msBusy=false;msQueue=[];}
+  if(robotAudioEl.paused) robotAudioEl.play().catch(()=>{});
+}
+function onRobotAudio(b64, mime){
+  if(!ms){initMS();return;}
+  if(ms.readyState!=='open') return;
+  try{
+    const bin=atob(b64);
+    const buf=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+    msQueue.push(buf.buffer);
+    drainMS();
+    document.getElementById('audio-indicator').className='ok';
+    clearTimeout(window._audioTimeout);
+    window._audioTimeout=setTimeout(()=>document.getElementById('audio-indicator').className='',1000);
+  }catch(e){}
+}
+initMS();
+
+// ════════════════════════════════════════════════════
+// ДВУСТОРОННИЙ ЗВУК — оператор говорит на борт
+// ════════════════════════════════════════════════════
+const talkBtn=document.getElementById('talk-btn');
+let opStream=null;
+
+talkBtn.addEventListener('mousedown',startTalk);
+talkBtn.addEventListener('touchstart',e=>{e.preventDefault();startTalk();},{passive:false});
+talkBtn.addEventListener('mouseup',stopTalk);
+talkBtn.addEventListener('touchend',stopTalk);
+talkBtn.addEventListener('mouseleave',stopTalk);
+
+async function startTalk(){
+  if(opRecorder) return;
+  try{
+    opStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    const options={mimeType:'audio/webm;codecs=opus'};
+    if(!MediaRecorder.isTypeSupported(options.mimeType)) delete options.mimeType;
+    opRecorder=new MediaRecorder(opStream,options);
+    opRecorder.ondataavailable=async ev=>{
+      if(!ev.data||ev.data.size===0||!ws||ws.readyState!==1) return;
+      const ab=await ev.data.arrayBuffer();
+      const b64=btoa(String.fromCharCode(...new Uint8Array(ab)));
+      ws.send(JSON.stringify({type:'operator_voice',data:b64}));
+    };
+    opRecorder.start(200);
+    talkBtn.classList.add('active');
+    talkBtn.textContent='🔴 Говорю...';
+  }catch(e){addMsg('Нет доступа к микрофону','err');}
+}
+function stopTalk(){
+  if(!opRecorder) return;
+  opRecorder.stop();
+  opRecorder=null;
+  if(opStream) opStream.getTracks().forEach(t=>t.stop());
+  opStream=null;
+  talkBtn.classList.remove('active');
+  talkBtn.textContent='🎙 Говорить';
+}
+
+// ════════════════════════════════════════════════════
+// GPS РОБОТА — карта
+// ════════════════════════════════════════════════════
+const robotIcon=L.divIcon({
+  className:'',
+  html:'<div style="width:16px;height:16px;background:#60a5fa;border:2.5px solid #0a0a12;border-radius:50%;box-shadow:0 0 8px #60a5fa,0 0 16px rgba(96,165,250,0.3)"></div>',
+  iconSize:[16,16],iconAnchor:[8,8]
+});
+let robotMk=null, trailPts=[], trailLine2=null, mapFollow=true;
+
+function onRobotGPS(d){
+  if(!d.lat||!d.lng) return;
+  if(!basePos) basePos={lat:d.lat,lng:d.lng};
+  document.getElementById('b-gps').textContent='GPS ±'+Math.round(d.acc||0)+'м';
+  document.getElementById('b-gps').className='badge ok';
+  if(!robotMk) robotMk=L.marker([d.lat,d.lng],{icon:robotIcon,zIndexOffset:1000}).addTo(map);
+  else robotMk.setLatLng([d.lat,d.lng]);
+  trailPts.push([d.lat,d.lng]);
+  if(trailPts.length>500) trailPts.shift();
+  if(trailLine2) map.removeLayer(trailLine2);
+  trailLine2=L.polyline(trailPts,{color:'#60a5fa',weight:2,opacity:0.4}).addTo(map);
+  if(mapFollow) map.setView([d.lat,d.lng],map.getZoom(),{animate:true});
+}
+
+// ════════════════════════════════════════════════════
+// СОНАРЫ
+// ════════════════════════════════════════════════════
+function onSensors(d){
+  const s=d.data||{};
+  [['f','front'],['l','left'],['r','right'],['b','rear']].forEach(([dir,key])=>{
+    const v=s[key]??400;
+    const bar=document.getElementById('b'+dir);
+    bar.style.width=Math.min(100,(v/200)*100)+'%';
+    bar.style.background=v<20?'#f87171':v<50?'#f59e0b':'#4ade80';
+    document.getElementById('v'+dir).textContent=v>=400?'—':v;
+  });
+  const hasObs=['front','left','right','rear'].some(k=>(s[k]??400)<30);
+  const obs=document.getElementById('b-obs');
+  if(hasObs){obs.style.display='';obs.textContent='⚠ препятствие';obs.className='badge err';}
+  else obs.style.display='none';
+}
+
+// ════════════════════════════════════════════════════
+// КАРТА
+// ════════════════════════════════════════════════════
+const map=L.map('map',{zoomControl:true,attributionControl:false}).setView([41.2995,69.2401],16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,opacity:0.85}).addTo(map);
+map.on('dragstart',()=>{mapFollow=false;});
+
+// Клик — добавить точку
+map.on('click',e=>{if(!navActive)addWP(e.latlng.lat,e.latlng.lng);});
+
+// ════════════════════════════════════════════════════
+// WAYPOINTS
+// ════════════════════════════════════════════════════
+function addWP(lat,lng){
+  const n=waypoints.length+1;
+  const mk=L.marker([lat,lng],{
+    icon:L.divIcon({className:'',html:`<div style="width:20px;height:20px;background:#f59e0b;border:2px solid #0a0a12;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;color:#0a0a12">${n}</div>`,iconSize:[20,20],iconAnchor:[10,10]}),
+    draggable:true
+  }).addTo(map);
+  mk.on('dragend',ev=>{
+    const i=waypoints.findIndex(w=>w.mk===mk);
+    if(i>=0){waypoints[i].lat=ev.target.getLatLng().lat;waypoints[i].lng=ev.target.getLatLng().lng;renderWPs();drawRoute();}
+  });
+  waypoints.push({lat,lng,mk});
+  renderWPs(); drawRoute();
+}
+
+function deleteWP(i){
+  if(navActive) return;
+  map.removeLayer(waypoints[i].mk);
+  waypoints.splice(i,1);
+  renumberMks(); renderWPs(); drawRoute();
+}
+
+function renumberMks(){
+  waypoints.forEach((w,i)=>w.mk.setIcon(L.divIcon({className:'',html:`<div style="width:20px;height:20px;background:#f59e0b;border:2px solid #0a0a12;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;color:#0a0a12">${i+1}</div>`,iconSize:[20,20],iconAnchor:[10,10]})));
+}
+
+function renderWPs(){
+  const list=document.getElementById('wp-list');
+  if(!waypoints.length){list.innerHTML='<div style="font-size:10px;color:#2a2a4a;text-align:center;padding:5px">Нажми на карту</div>';document.getElementById('nav-start').disabled=true;return;}
+  list.innerHTML=waypoints.map((w,i)=>`<div class="wpi ${navActive&&i===currentWP?'active':''} ${navActive&&i<currentWP?'done':''}"><span class="wpi-n">${i+1}</span><span class="wpi-c">${w.lat.toFixed(4)},${w.lng.toFixed(4)}</span><button class="wpi-x" onclick="deleteWP(${i})" ${navActive?'disabled':''}>✕</button></div>`).join('');
+  document.getElementById('nav-start').disabled=navActive||!waypoints.length;
+}
+
+function drawRoute(){
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  if(!waypoints.length) return;
+  const pts=waypoints.map(w=>[w.lat,w.lng]);
+  if(robotMk) pts.unshift(robotMk.getLatLng());
+  routeLine=L.polyline(pts,{color:navActive?'#f59e0b':'#333',weight:2,dashArray:navActive?null:'5 4',opacity:0.7}).addTo(map);
+}
+
+function sendToEsp(obj){
+  if(!ws||ws.readyState!==1||!espId) return;
+  ws.send(JSON.stringify({...obj,target:espId,type:'esp_cmd'}));
+}
+
+// СТАРТ — сразу едем, маршрут строим фоном
+document.getElementById('nav-start').addEventListener('click',()=>{
+  if(!waypoints.length){setNavStatus('Нет точек','err');return;}
+  navActive=true; navPaused=false; currentWP=0;
+  setB('b-mode','АВТО','ok');
+  document.getElementById('nav-start').disabled=true;
+  document.getElementById('nav-stop').disabled=false;
+  // НЕМЕДЛЕННО команда к первой точке
+  sendToEsp({type:'navigate',lat:waypoints[0].lat,lng:waypoints[0].lng});
+  // Через 300мс весь маршрут (пока уже едем)
+  setTimeout(()=>{
+    if(espId&&ws&&ws.readyState===1&&navActive){
+      sendToEsp({type:'waypoints',points:waypoints.map(w=>({lat:w.lat,lng:w.lng}))});
+    }
+  },300);
+  setNavStatus('▶ Едем к точке 1','ok');
+  renderWPs(); drawRoute();
+});
+
+document.getElementById('nav-stop').addEventListener('click',()=>stopNav('Остановлен'));
+
+document.getElementById('nav-base').addEventListener('click',()=>{
+  if(!basePos){setNavStatus('База не определена','err');return;}
+  stopNav();
+  waypoints.forEach(w=>map.removeLayer(w.mk)); waypoints=[];
+  addWP(basePos.lat,basePos.lng);
+  setTimeout(()=>document.getElementById('nav-start').click(),200);
+});
+
+document.getElementById('nav-stay').addEventListener('click',()=>{
+  sendToEsp({type:'cmd',cmd:'stop',speed:0});
+  navActive=false;
+  setB('b-mode','СТОП','warn');
+  setNavStatus('Стоит на месте','warn');
+  document.getElementById('nav-start').disabled=false;
+  document.getElementById('nav-stop').disabled=true;
+});
+
+document.getElementById('nav-clear').addEventListener('click',()=>{
+  stopNav('Сброс маршрута');
+  waypoints.forEach(w=>map.removeLayer(w.mk)); waypoints=[];
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  renderWPs();
+});
+
+function stopNav(reason){
+  if(!navActive&&!navPaused) return;
+  navActive=false; navPaused=false;
+  sendToEsp({type:'nav_cancel'}); sendToEsp({type:'cmd',cmd:'stop',speed:0});
+  setB('b-mode','РУЧНОЙ','warn');
+  document.getElementById('nav-start').disabled=false;
+  document.getElementById('nav-stop').disabled=true;
+  setNavStatus(reason||'Остановлен','warn');
+  renderWPs(); drawRoute();
+}
+
+function onNavProgress(d){
+  currentWP=d.wp_index||0;
+  setNavStatus(`→ ${currentWP+1}/${waypoints.length} (${d.dist_m||'?'}м)`,'ok');
+  renderWPs();
+}
+function onNavDone(){
+  navActive=false;
+  setB('b-mode','РУЧНОЙ','warn');
+  document.getElementById('nav-start').disabled=false;
+  document.getElementById('nav-stop').disabled=true;
+  setNavStatus('✓ Маршрут выполнен!','ok');
+  addMsg('Маршрут выполнен — все точки достигнуты!','sys');
+  speak('Маршрут выполнен!');
+  renderWPs(); drawRoute();
+}
+
+// ════════════════════════════════════════════════════
+// D-PAD
+// ════════════════════════════════════════════════════
+const pressed=new Set();
+document.querySelectorAll('.db[data-cmd]').forEach(btn=>{
+  const cmd=btn.dataset.cmd;
+  const dn=e=>{
+    e.preventDefault(); btn.classList.add('on');
+    if(cmd==='stop'){pressed.clear();sendCmd('stop');if(navActive){navPaused=false;stopNav('Ручная остановка');}}
+    else{
+      if(navActive){navPaused=true;sendToEsp({type:'nav_cancel'});}
+      pressed.add(cmd); sendCmd(cmd);
+    }
+  };
+  const up=e=>{
+    btn.classList.remove('on');
+    if(cmd!=='stop'){
+      pressed.delete(cmd);
+      const nc=pressed.size?[...pressed][0]:'stop';
+      sendCmd(nc);
+      // Если отпустили все кнопки и был паузой — возобновить маршрут
+      if(pressed.size===0&&navPaused&&waypoints.length>currentWP){
+        navPaused=false; navActive=true;
+        sendToEsp({type:'waypoints',points:waypoints.slice(currentWP).map(w=>({lat:w.lat,lng:w.lng}))});
+        setNavStatus('Продолжаю маршрут...','ok');
+      }
+    }
+  };
+  btn.addEventListener('mousedown',dn);btn.addEventListener('touchstart',dn,{passive:false});
+  btn.addEventListener('mouseup',up);btn.addEventListener('touchend',up);btn.addEventListener('mouseleave',up);btn.addEventListener('touchcancel',up);
+});
+const km={ArrowUp:'forward',KeyW:'forward',ArrowDown:'backward',KeyS:'backward',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'stop'};
+document.addEventListener('keydown',e=>{const c=km[e.code];if(!c)return;e.preventDefault();if(c==='stop'){pressed.clear();sendCmd('stop');}else if(!pressed.has(c)){pressed.add(c);sendCmd(c);}});
+document.addEventListener('keyup',e=>{const c=km[e.code];if(!c||c==='stop')return;pressed.delete(c);sendCmd(pressed.size?[...pressed][0]:'stop');});
+window.addEventListener('blur',()=>{pressed.clear();sendCmd('stop');});
+
+function sendCmd(cmd){
+  if(!ws||ws.readyState!==1||!espId) return;
+  ws.send(JSON.stringify({target:espId,type:'esp_cmd',cmd,speed}));
+}
+
+document.getElementById('spd-slider').addEventListener('input',function(){speed=parseInt(this.value);document.getElementById('spd-val').textContent=speed;});
+
+// ════════════════════════════════════════════════════
+// ГОЛОСОВЫЕ КОМАНДЫ ОТ РОБОТА
+// ════════════════════════════════════════════════════
+function onVoiceCmd(cmd){
+  addMsg('Голосовая команда: '+cmd,'sys');
+  if(cmd==='stop')  {pressed.clear();sendCmd('stop');}
+  else if(cmd==='home')  {document.getElementById('nav-base').click();}
+  else if(cmd==='go')    {if(!navActive) document.getElementById('nav-start').click();}
+  else if(cmd==='reset') {document.getElementById('nav-clear').click();}
+}
+
+// ════════════════════════════════════════════════════
+// TTS ОПЕРАТОРА (играет на борту через сервер)
+// ════════════════════════════════════════════════════
+let voices=[], ttsAudio=null;
+speechSynthesis.addEventListener('voiceschanged',()=>{voices=speechSynthesis.getVoices();});
+async function speak(text){
+  if(!text) return;
+  // Отправить команду воспроизвести на борту
+  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'tts_to_robot',text}));
+}
+
+// ════════════════════════════════════════════════════
+// AI ЧАТ
+// ════════════════════════════════════════════════════
+async function askAI(userText, withImage=false){
+  if(aiPending) return;
+  aiPending=true;
+  history.push({role:'user',content:userText});
+  const thinking=addMsg('думаю...','thinking');
+  try{
+    const body={
+      system:'Ты дерзкий шутливый робот по имени Пит. Отвечай кратко (1-3 предложения) с юмором на языке пользователя.',
+      messages:history.slice(-10)
+    };
+    // Если нужен анализ с изображением — добавляем кадр
+    if(withImage&&camImg.src&&camImg.src.includes('base64')){
+      const b64=camImg.src.split(',')[1];
+      const last=body.messages[body.messages.length-1];
+      last.content=[
+        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+        {type:'text',text:userText}
+      ];
+    }
+    const r=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok){thinking.remove();addMsg('Ошибка '+r.status,'err');return;}
+    const data=await r.json();
+    if(!data.ok){thinking.remove();addMsg('AI ошибка: '+data.error,'err');return;}
+    thinking.remove();
+    const reply=data.reply||'...';
+    addMsg(reply,'bot');
+    history.push({role:'assistant',content:reply});
+    speak(reply);
+  }catch(ex){thinking.remove();addMsg('Ошибка: '+ex.message,'err');}
+  finally{aiPending=false;}
+}
+
+document.getElementById('chat-send').addEventListener('click',()=>{
+  const t=document.getElementById('chat-inp').value.trim();
+  if(!t) return;
+  addMsg(t,'user'); document.getElementById('chat-inp').value='';
+  askAI(t);
+});
+document.getElementById('chat-inp').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();document.getElementById('chat-send').click();}
+});
+
+// Голосовой ввод в чат
+const SR2=window.SpeechRecognition||window.webkitSpeechRecognition;
+let chatSR=null;
+document.getElementById('chat-mic').addEventListener('click',()=>{
+  if(!SR2){addMsg('Только в Chrome','err');return;}
+  if(chatSR){try{chatSR.stop();}catch(e){}chatSR=null;document.getElementById('chat-mic').classList.remove('active');return;}
+  chatSR=new SR2(); chatSR.lang='ru-RU'; chatSR.continuous=false; chatSR.interimResults=false;
+  chatSR.onresult=ev=>{const t=ev.results[0][0].transcript.trim();if(t){addMsg(t,'user');askAI(t);}};
+  chatSR.onend=()=>{chatSR=null;document.getElementById('chat-mic').classList.remove('active');};
+  chatSR.onerror=e=>{chatSR=null;document.getElementById('chat-mic').classList.remove('active');};
+  document.getElementById('chat-mic').classList.add('active');
+  try{chatSR.start();}catch(e){}
+});
+
+// ════════════════════════════════════════════════════
+// WAKE / MIC TOGGLES
+// ════════════════════════════════════════════════════
+// (wake word работает на борту — здесь просто индикаторы)
+document.getElementById('chk-wake').addEventListener('change',function(){
+  document.getElementById('wake-indicator').textContent=this.checked?'Ожидание «РОБОТ»...':'Wake word выключен';
+});
+document.getElementById('chk-always').addEventListener('change',function(){
+  document.getElementById('wake-indicator').textContent=this.checked?'Постоянное прослушивание':'Ожидание «РОБОТ»...';
+});
+
+// ════════════════════════════════════════════════════
+// MOBILE PANEL TOGGLE
+// ════════════════════════════════════════════════════
+document.getElementById('toggle-left').addEventListener('click',()=>{
+  document.getElementById('left-panel').classList.toggle('show');
+});
+</script>
+</body>
+</html>
