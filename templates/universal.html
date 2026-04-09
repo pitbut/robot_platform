@@ -520,12 +520,43 @@ function onSensors(d){
 // ════════════════════════════════════════════════════
 // КАРТА
 // ════════════════════════════════════════════════════
-const map=L.map('map',{zoomControl:true,attributionControl:false}).setView([41.2995,69.2401],16);
+const map=L.map('map',{zoomControl:true,attributionControl:false,tap:true,tapTolerance:15}).setView([41.2995,69.2401],16);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,opacity:0.85}).addTo(map);
 map.on('dragstart',()=>{mapFollow=false;});
 
-// Клик — добавить точку
-map.on('click',e=>{if(!navActive)addWP(e.latlng.lat,e.latlng.lng);});
+// Клик/тап — добавить точку маршрута
+// click работает на десктопе и iOS
+// contextmenu — долгое нажатие на Android (Leaflet tap эмулирует)
+map.on('click', e=>{
+  // Игнорируем если попали на маркер
+  if(e.originalEvent && e.originalEvent.target &&
+     e.originalEvent.target.closest('.leaflet-marker-icon')) return;
+  if(!navActive) addWP(e.latlng.lat, e.latlng.lng);
+});
+
+// Дополнительно: долгое нажатие на карте = добавить точку (Android)
+let touchTimer=null, touchMoved=false;
+document.getElementById('map').addEventListener('touchstart', ev=>{
+  touchMoved=false;
+  const t=ev.touches[0];
+  touchTimer=setTimeout(()=>{
+    if(!touchMoved&&!navActive){
+      const pt=map.containerPointToLatLng(
+        L.point(t.clientX - map.getContainer().getBoundingClientRect().left,
+                t.clientY - map.getContainer().getBoundingClientRect().top)
+      );
+      addWP(pt.lat, pt.lng);
+      // Вибрация как подтверждение (если поддерживается)
+      if(navigator.vibrate) navigator.vibrate(50);
+    }
+  }, 600);
+},{passive:true});
+document.getElementById('map').addEventListener('touchmove', ()=>{
+  touchMoved=true; clearTimeout(touchTimer);
+},{passive:true});
+document.getElementById('map').addEventListener('touchend', ()=>{
+  clearTimeout(touchTimer);
+},{passive:true});
 
 // ════════════════════════════════════════════════════
 // WAYPOINTS
@@ -560,6 +591,10 @@ function renderWPs(){
   if(!waypoints.length){list.innerHTML='<div style="font-size:10px;color:#2a2a4a;text-align:center;padding:5px">Нажми на карту</div>';document.getElementById('nav-start').disabled=true;return;}
   list.innerHTML=waypoints.map((w,i)=>`<div class="wpi ${navActive&&i===currentWP?'active':''} ${navActive&&i<currentWP?'done':''}"><span class="wpi-n">${i+1}</span><span class="wpi-c">${w.lat.toFixed(4)},${w.lng.toFixed(4)}</span><button class="wpi-x" onclick="deleteWP(${i})" ${navActive?'disabled':''}>✕</button></div>`).join('');
   document.getElementById('nav-start').disabled=navActive||!waypoints.length;
+  // Показываем подсказку если ESP не подключён
+  const startBtn=document.getElementById('nav-start');
+  if(waypoints.length&&!espId) startBtn.title='ESP не подключён';
+  else startBtn.title='';
 }
 
 function drawRoute(){
@@ -572,12 +607,24 @@ function drawRoute(){
 
 function sendToEsp(obj){
   if(!ws||ws.readyState!==1||!espId) return;
-  ws.send(JSON.stringify({...obj,target:espId,type:'esp_cmd'}));
+  // Навигационные команды передаём через inner_type
+  // чтобы сервер сохранил их тип при пересылке на ESP
+  const NAV = ['waypoints','navigate','nav_cancel','config','phone_gps'];
+  const out = {...obj, target:espId, type:'esp_cmd'};
+  if(NAV.includes(obj.type)){
+    out.inner_type = obj.type;
+  }
+  ws.send(JSON.stringify(out));
 }
 
 // СТАРТ — сразу едем, маршрут строим фоном
 document.getElementById('nav-start').addEventListener('click',()=>{
   if(!waypoints.length){setNavStatus('Нет точек','err');return;}
+  if(!espId){
+    setNavStatus('ESP не подключён! Включи ESP и подожди.','err');
+    addMsg('⚠ ESP не подключён — робот не может получить команду','err');
+    return;
+  }
   navActive=true; navPaused=false; currentWP=0;
   setB('b-mode','АВТО','ok');
   document.getElementById('nav-start').disabled=true;
