@@ -292,8 +292,22 @@ def ws_robot_phone(ws):
                             cam_subscribers.remove(d)
 
             elif t == 'gps':
-                u_broadcast({'type': 'robot_gps', 'lat': data.get('lat'),
-                             'lng': data.get('lng'), 'acc': data.get('acc', 0)})
+                lat = data.get('lat')
+                lng = data.get('lng')
+                u_broadcast({'type': 'robot_gps', 'lat': lat,
+                             'lng': lng, 'acc': data.get('acc', 0)})
+                # Forward GPS to all ESPs so autopilot knows robot position
+                gps_for_esp = json.dumps({
+                    'type': 'phone_gps', 'lat': lat, 'lng': lng,
+                    'accuracy': data.get('acc', 0), 'speed': 0
+                })
+                with _lock:
+                    esps = list(esp_clients.values())
+                for esp_info in esps:
+                    try:
+                        esp_info['ws'].send(gps_for_esp)
+                    except Exception:
+                        pass
 
             elif t in ('wake_word', 'voice_command', 'audio_chunk'):
                 u_broadcast(data)
@@ -364,14 +378,21 @@ def ws_universal(ws):
                         pass
 
             elif t == 'esp_cmd':
+                # Браузер шлёт esp_cmd — пересылаем на нужный ESP
+                # Тип для ESP определяется полем inner_type если есть,
+                # иначе 'cmd' (движение)
                 target = data.get('target')
                 if target:
                     with _lock:
                         info = esp_clients.get(target)
                     if info:
-                        # Переводим esp_cmd → cmd для ESP
-                        cmd_data = dict(data)
-                        cmd_data['type'] = 'cmd'
+                        cmd_data = {k: v for k, v in data.items()
+                                    if k not in ('target',)}
+                        # Если есть inner_type — это навигационная команда
+                        if 'inner_type' in cmd_data:
+                            cmd_data['type'] = cmd_data.pop('inner_type')
+                        else:
+                            cmd_data['type'] = 'cmd'
                         try:
                             info['ws'].send(json.dumps(cmd_data))
                         except Exception:
