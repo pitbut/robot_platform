@@ -294,12 +294,15 @@ def ws_robot_phone(ws):
             elif t == 'gps':
                 lat = data.get('lat')
                 lng = data.get('lng')
-                u_broadcast({'type': 'robot_gps', 'lat': lat,
-                             'lng': lng, 'acc': data.get('acc', 0)})
-                # Forward GPS to all ESPs so autopilot knows robot position
+                acc = data.get('acc', 0)
+                # → операторам universal профиля
+                u_broadcast({'type': 'robot_gps', 'lat': lat, 'lng': lng, 'acc': acc})
+                # → браузерам delivery профиля (тоже нужно видеть робота)
+                broadcast({'type': 'robot_gps', 'lat': lat, 'lng': lng, 'acc': acc})
+                # → всем ESP (автопилот должен знать координаты)
                 gps_for_esp = json.dumps({
                     'type': 'phone_gps', 'lat': lat, 'lng': lng,
-                    'accuracy': data.get('acc', 0), 'speed': 0
+                    'accuracy': acc, 'speed': 0
                 })
                 with _lock:
                     esps = list(esp_clients.values())
